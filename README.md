@@ -1,3 +1,2 @@
-# PrefabScratchpad
-Prefab object access scratchpad editor window
-Test
+# Prefab Scratchpad
+Prefabオブジェクトに素早くアクセスできるように、リストに登録してオブジェクトにアクセスできるUnity Editor拡張です。
