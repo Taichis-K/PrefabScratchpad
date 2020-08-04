@@ -20,19 +20,25 @@ namespace PrefabScratchpad
 		public static void ShowWindow()
 		{
 			GetWindow<PrefabScratchpadWindow>("Prefab Scratchpad");
+
+			LoadData();
 		}
 
+		static PrefabScratchpadData	m_scratchpadData;
 
 		GUIContent btnCntent = new GUIContent();
 
-		List<GameObject>	m_prefabList = new List<GameObject>();
 		ReorderableList		m_reorderableList;
 		Vector2				m_scrollPosition = new Vector2(0, 0);
 
 		void OnEnable()
 		{
+			if(m_scratchpadData == null) {
+				LoadData();
+			}
+
 			m_reorderableList = new ReorderableList(
-				elements: m_prefabList,
+				elements: m_scratchpadData.m_prefabList,
 				elementType: typeof(GameObject),
 				draggable: true,
 				displayHeader: false,
@@ -50,7 +56,8 @@ namespace PrefabScratchpad
 
 				if (GUILayout.Button(btnCntent, GUI.skin.button, GUILayout.Height(20)))
 				{
-					m_prefabList.Clear();
+					m_scratchpadData.m_prefabList.Clear();
+					EditorUtility.SetDirty(m_scratchpadData);
 				}
 			}
 			#endregion Horizontal
@@ -74,6 +81,7 @@ namespace PrefabScratchpad
 						DragAndDrop.AcceptDrag();
 
 						AddPrefab(DragAndDrop.objectReferences);
+						DeleteMissingPrefab();
 
 						DragAndDrop.activeControlID = 0;
 					}
@@ -91,31 +99,62 @@ namespace PrefabScratchpad
 			#endregion
 		}
 
-		void AddPrefab(Object[] objectReferences)
+		static void AddPrefab(Object[] objectReferences)
 		{
 			foreach(var obj in objectReferences) {
 				if(PrefabUtility.IsPartOfAnyPrefab(obj)) {
-					foreach(var go in m_prefabList) {
-						if(go == obj) {
+					var goObj = obj as GameObject;
+					if(!string.IsNullOrEmpty(goObj.scene.name)) {
+						// SceneにあるPrefabならソースにする
+						goObj = PrefabUtility.GetCorrespondingObjectFromOriginalSource(goObj);
+					}
+					foreach(var go in m_scratchpadData.m_prefabList) {
+						if(go == goObj) {
 							// 一番先頭にするためリストから抜く
-							m_prefabList.Remove(go);
+							m_scratchpadData.m_prefabList.Remove(go);
 							break;
 						}
 					}
-					m_prefabList.Insert(0, obj as GameObject);
+					m_scratchpadData.m_prefabList.Insert(0, goObj);
+					EditorUtility.SetDirty(m_scratchpadData);
 				}
 			}
-			// ついでにmissiingがあったら削除する
-			for(int i = m_prefabList.Count - 1 ; i >= 0 ; --i) {
-				if(!m_prefabList[i]) {
-					m_prefabList.RemoveAt(i);
+		}
+
+		static void DeleteMissingPrefab()
+		{
+			bool	removed = false;
+			for(int i = m_scratchpadData.m_prefabList.Count - 1 ; i >= 0 ; --i) {
+				if(!m_scratchpadData.m_prefabList[i]) {
+					m_scratchpadData.m_prefabList.RemoveAt(i);
+					removed = true;
 				}
+			}
+			if(removed) {
+				EditorUtility.SetDirty(m_scratchpadData);
+			}
+		}
+
+		static void LoadData()
+		{
+			var path = "Assets/Editor/PrefabScratchpad/PrefabScratchpadData.asset";
+			m_scratchpadData = AssetDatabase.LoadAssetAtPath<PrefabScratchpadData>(path);
+			if(m_scratchpadData != null) {
+				DeleteMissingPrefab();
+			}
+
+			if(m_scratchpadData == null) {
+				m_scratchpadData = ScriptableObject.CreateInstance<PrefabScratchpadData>();
+				AssetDatabase.CreateAsset(m_scratchpadData, path);
 			}
 		}
 
 		void OnElementCallback(Rect rect, int index, bool isActive, bool isFocused)
 		{
-			EditorGUI.ObjectField(rect, m_prefabList[index], typeof(GameObject), false);
+			if(m_scratchpadData == null) {
+				return;
+			}
+			EditorGUI.ObjectField(rect, m_scratchpadData.m_prefabList[index], typeof(GameObject), false);
 		}
 	}
 
