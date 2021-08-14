@@ -64,7 +64,7 @@ namespace PrefabScratchpad
 
 			#region Drag&Drop Area
 			var evt = Event.current;
-			var dropArea = GUILayoutUtility.GetRect(0.0f, 50.0f, GUILayout.ExpandWidth(true));
+			var dropArea = GUILayoutUtility.GetRect(0.0f, 25.0f, GUILayout.ExpandWidth(true));
 			GUI.Box(dropArea, "Drag & Drop");
 			switch (evt.type) {
 			case EventType.DragUpdated:
