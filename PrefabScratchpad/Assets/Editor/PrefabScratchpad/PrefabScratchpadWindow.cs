@@ -19,9 +19,9 @@ namespace PrefabScratchpad
 		[MenuItem("Window/Prefab Scratchpad")]
 		public static void ShowWindow()
 		{
-			GetWindow<PrefabScratchpadWindow>("Prefab Scratchpad");
+			var window = GetWindow<PrefabScratchpadWindow>("Prefab Scratchpad");
 
-			LoadData();
+			LoadData(window);
 		}
 
 		static PrefabScratchpadData	m_scratchpadData;
@@ -34,7 +34,7 @@ namespace PrefabScratchpad
 		void OnEnable()
 		{
 			if(m_scratchpadData == null) {
-				LoadData();
+				LoadData(this);
 			}
 
 			m_reorderableList = new ReorderableList(
@@ -135,9 +135,14 @@ namespace PrefabScratchpad
 			}
 		}
 
-		static void LoadData()
+		static void LoadData(PrefabScratchpadWindow window)
 		{
-			var path = "Assets/Editor/PrefabScratchpad/PrefabScratchpadData.asset";
+			// このcsファイルのあるディレクトリを基準にデータパスを作る
+			var mono = MonoScript.FromScriptableObject(window);
+			var scriptPath = AssetDatabase.GetAssetPath(mono);
+			var basePath = Path.GetDirectoryName(scriptPath).Replace('\\', '/');
+			var path = basePath + "/PrefabScratchpadData.asset";
+
 			m_scratchpadData = AssetDatabase.LoadAssetAtPath<PrefabScratchpadData>(path);
 			if(m_scratchpadData != null) {
 				DeleteMissingPrefab();
