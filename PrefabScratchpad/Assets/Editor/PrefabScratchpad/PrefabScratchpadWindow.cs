@@ -8,6 +8,7 @@ using System.IO;
 using UnityEngine;
 using UnityEditor;
 using UnityEditorInternal;
+using UnityEditor.IMGUI.Controls;
 
 namespace PrefabScratchpad
 { 
@@ -31,11 +32,19 @@ namespace PrefabScratchpad
 		ReorderableList		m_reorderableList;
 		Vector2				m_scrollPosition = new Vector2(0, 0);
 
+		// 検索バー用の文字列
+		string m_searchText = "";
+		// SearchFieldクラスのインスタンス（標準の検索バー風に描画）
+		SearchField m_searchField;
+
 		void OnEnable()
 		{
 			if(m_scratchpadData == null) {
 				LoadData(this);
 			}
+
+			// SearchFieldの初期化
+			m_searchField = new SearchField();
 
 			m_reorderableList = new ReorderableList(
 				elements: m_scratchpadData.m_prefabList,
@@ -46,6 +55,15 @@ namespace PrefabScratchpad
 				displayRemoveButton: true
 				);
 			m_reorderableList.drawElementCallback += OnElementCallback;
+			// 削除ボタンの処理（全件表示時）
+			m_reorderableList.onRemoveCallback += (ReorderableList list) => {
+				m_scratchpadData.m_prefabList.RemoveAt(list.index);
+				EditorUtility.SetDirty(m_scratchpadData);
+			};
+			// ドラッグ後の順序変更時（全件表示時）は特に追加処理は不要
+			m_reorderableList.onReorderCallback += (ReorderableList list) => {
+				EditorUtility.SetDirty(m_scratchpadData);
+			};
 		}
 
 		void OnGUI()
@@ -91,10 +109,77 @@ namespace PrefabScratchpad
 			}
 			#endregion
 
+			#region Search Bar（標準の検索バー風）
+			EditorGUILayout.Space();
+			// SearchField の OnGUI を使うと、標準と同じ見た目・クリアボタンが自動で描画される
+			m_searchText = m_searchField.OnGUI(m_searchText);
+			EditorGUILayout.Space();
+			#endregion
+
 			#region Prefab List
-			using (var scrollView = new EditorGUILayout.ScrollViewScope(m_scrollPosition)) {
+			using(var scrollView = new EditorGUILayout.ScrollViewScope(m_scrollPosition)) {
 				m_scrollPosition = scrollView.scrollPosition;
-				m_reorderableList.DoLayoutList();
+				// 検索文字列が空なら既存のReorderableListで全件表示
+				if(string.IsNullOrEmpty(m_searchText)) {
+					m_reorderableList.DoLayoutList();
+				}
+				else {
+					// 元リストから検索条件に一致するPrefabとその元リスト上のインデックスを取得
+					List<int> filteredIndices = new List<int>();
+					List<GameObject> filteredList = new List<GameObject>();
+					for(int i = 0; i < m_scratchpadData.m_prefabList.Count; i++) {
+						GameObject go = m_scratchpadData.m_prefabList[i];
+						if(go != null && go.name.IndexOf(m_searchText, System.StringComparison.OrdinalIgnoreCase) >= 0) {
+							filteredIndices.Add(i);
+							filteredList.Add(go);
+						}
+					}
+
+					// 検索結果が0件の場合
+					if(filteredList.Count == 0) {
+						EditorGUILayout.LabelField("No matching prefabs found.");
+					}
+					else {
+						// 一時的なReorderableListを生成（検索条件に一致するPrefabのみを表示）
+						ReorderableList filteredReorderableList = new ReorderableList(
+							elements: filteredList,
+							elementType: typeof(GameObject),
+							draggable: true,
+							displayHeader: false,
+							displayAddButton: false,
+							displayRemoveButton: true
+						);
+						// 各要素の描画処理
+						filteredReorderableList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) => {
+							if(index < filteredList.Count) {
+								EditorGUI.ObjectField(rect, filteredList[index], typeof(GameObject), false);
+							}
+						};
+						// 削除ボタン処理：元のリストから対象Prefabを削除
+						filteredReorderableList.onRemoveCallback = (ReorderableList list) => {
+							int index = list.index;
+							if(index >= 0 && index < filteredList.Count) {
+								int origIndex = filteredIndices[index];
+								// GUIレイアウト処理が終了してから削除を行う
+								EditorApplication.delayCall += () => {
+									m_scratchpadData.m_prefabList.RemoveAt(origIndex);
+									EditorUtility.SetDirty(m_scratchpadData);
+								};
+							}
+						};
+						// ドラッグ＆ドロップで順序変更時の処理
+						filteredReorderableList.onReorderCallback = (ReorderableList list) => {
+							List<int> sortedIndices = new List<int>(filteredIndices);
+							sortedIndices.Sort();
+							for(int j = 0; j < sortedIndices.Count && j < filteredList.Count; j++) {
+								m_scratchpadData.m_prefabList[sortedIndices[j]] = filteredList[j];
+							}
+							EditorUtility.SetDirty(m_scratchpadData);
+						};
+
+						filteredReorderableList.DoLayoutList();
+					}
+				}
 			}
 			#endregion
 		}
